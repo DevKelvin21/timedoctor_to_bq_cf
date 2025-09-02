@@ -106,17 +106,24 @@ def _flatten(company_id: str, payload: List[Dict[str, Any]]) -> List[Dict[str, A
             except Exception:
                 hours_f = (seconds / 3600.0) if seconds is not None else None
 
+            # ensure shift_starts_ts is INT64
+            shift_ts = sch.get("shiftStartsTs")
+            try:
+                shift_ts = int(shift_ts) if shift_ts not in (None, "") else None
+            except Exception:
+                shift_ts = None
+
             rows.append({
                 "company_id": str(company_id),
                 "employee_fullname": fullname,
-                "shift_date": d.isoformat(),
+                "shift_date": d.isoformat(),  # 'YYYY-MM-DD' -> will load into DATE with schema
                 "actual_hours_worked_seconds": seconds,
                 "actual_hours_worked_hours": hours_f,
                 "actual_hours_worked_str": hours_s,
                 "status": sch.get("status"),
                 "source_actual_start": sch.get("actualStart"),
                 "source_actual_end": sch.get("actualEndTime"),
-                "shift_starts_ts": sch.get("shiftStartsTs"),
+                "shift_starts_ts": shift_ts,
             })
     return rows
 
@@ -126,16 +133,38 @@ def _bq_table(project_id: str, dataset: str, table: str) -> str:
 def _stage_name(table_id: str) -> str:
     return f"{table_id}_stg_{int(time.time())}"
 
+def _staging_schema() -> List[bigquery.SchemaField]:
+    # Match your target table exactly to avoid MERGE type errors
+    return [
+        bigquery.SchemaField("company_id", "STRING"),
+        bigquery.SchemaField("employee_fullname", "STRING"),
+        bigquery.SchemaField("shift_date", "DATE"),
+        bigquery.SchemaField("actual_hours_worked_seconds", "INT64"),
+        bigquery.SchemaField("actual_hours_worked_hours", "FLOAT64"),
+        bigquery.SchemaField("actual_hours_worked_str", "STRING"),
+        bigquery.SchemaField("status", "STRING"),
+        bigquery.SchemaField("source_actual_start", "STRING"),
+        bigquery.SchemaField("source_actual_end", "STRING"),
+        bigquery.SchemaField("shift_starts_ts", "INT64"),
+    ]
+
 def _upsert(client: bigquery.Client, table_id: str, rows: List[Dict[str, Any]]):
     if not rows:
         return 0
     staging_id = _stage_name(table_id)
+
+    # Load with explicit schema (no autodetect) so S.* types == T.* types
     load_job = client.load_table_from_json(
         rows,
         staging_id,
-        job_config=bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE", autodetect=True),
+        job_config=bigquery.LoadJobConfig(
+            write_disposition="WRITE_TRUNCATE",
+            schema=_staging_schema(),
+            ignore_unknown_values=True,
+        ),
     )
     load_job.result()
+
     merge_sql = f"""
     MERGE `{table_id}` T
     USING `{staging_id}` S
