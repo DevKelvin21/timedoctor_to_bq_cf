@@ -19,7 +19,7 @@ COMPANY_ID = os.getenv("TD_COMPANY_ID")
 TD_CLIENT_ID = os.getenv("TD_CLIENT_ID", "")
 TD_CLIENT_SECRET = os.getenv("TD_CLIENT_SECRET", "")
 TD_REDIRECT_URI = os.getenv("TD_REDIRECT_URI", "")  # must EXACTLY match the registered redirect, incl. trailing slash
-TD_REFRESH_SECRET_RES = os.getenv("TD_REFRESH_TOKEN", "")  # e.g. projects/12345/secrets/TD_REFRESH_TOKEN
+TD_REFRESH_SECRET_RES = os.getenv("TD_REFRESH_SECRET_RES", "")  # e.g. projects/12345/secrets/TD_REFRESH_TOKEN
 API_BASE = "https://webapi.timedoctor.com/v1.1"
 OAUTH_TOKEN_URL = "https://webapi.timedoctor.com/oauth/v2/token"
 
